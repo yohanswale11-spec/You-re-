@@ -1,5 +1,7 @@
 import os
 import logging
+from threading import Thread
+from flask import Flask
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
     ApplicationBuilder,
@@ -18,7 +20,23 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
-# States
+# --- FLASK SERVER FOR RENDER WEB SERVICE ---
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "Bot is running online 24/7!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    web_app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.daemon = True
+    t.start()
+
+# --- BOT STATES ---
 (
     SELECT_STORE,
     SELECT_PRODUCT,
@@ -169,10 +187,8 @@ async def location_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💵 የማድረሻ ክፍያ: በካሽ የሚቀበሉት"
     )
     
-    # Clean UI (Delete intermediate options)
     await cleanup_messages(context, update.effective_chat.id)
 
-    # Admin Notifications
     await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_id, caption=summary_text, parse_mode="Markdown")
     await context.bot.send_location(chat_id=ADMIN_ID, latitude=lat, longitude=lon)
 
@@ -313,6 +329,9 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not TOKEN:
         raise ValueError("BOT_TOKEN environment variable is not set!")
+
+    # Start Flask Server for Render
+    keep_alive()
 
     app = ApplicationBuilder().token(TOKEN).build()
 
